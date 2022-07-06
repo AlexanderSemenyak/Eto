@@ -7,42 +7,6 @@ using Eto.Drawing;
 using Eto.Mac.Drawing;
 using Eto.Mac.Forms.Cells;
 
-#if XAMMAC2
-using AppKit;
-using Foundation;
-using CoreGraphics;
-using ObjCRuntime;
-using CoreAnimation;
-#else
-using MonoMac.AppKit;
-using MonoMac.Foundation;
-using MonoMac.CoreGraphics;
-using MonoMac.ObjCRuntime;
-using MonoMac.CoreAnimation;
-#if Mac64
-using nfloat = System.Double;
-using nint = System.Int64;
-using nuint = System.UInt64;
-#else
-using nfloat = System.Single;
-using nint = System.Int32;
-using nuint = System.UInt32;
-#endif
-#if SDCOMPAT
-using CGSize = System.Drawing.SizeF;
-using CGRect = System.Drawing.RectangleF;
-using CGPoint = System.Drawing.PointF;
-#endif
-#endif
-
-#if XAMMAC
-using nnint = System.Int32;
-#elif Mac64
-using nnint = System.UInt64;
-#else
-using nnint = System.UInt32;
-#endif
-
 namespace Eto.Mac.Forms.Controls
 {
 	public interface IGridHandler : IMacViewHandler
@@ -70,11 +34,11 @@ namespace Eto.Mac.Forms.Controls
 		public static readonly object IsCancelEdit_Key = new object();
 	}
 
-	class EtoTableHeaderView : NSTableHeaderView
+	class EtoTableHeaderView : NSTableHeaderView, IMacControl
 	{
-		WeakReference handler;
+		public IGridHandler Handler { get { return (IGridHandler)WeakHandler.Target; } set { WeakHandler = new WeakReference(value); } }
 
-		public IGridHandler Handler { get { return (IGridHandler)handler.Target; } set { handler = new WeakReference(value); } }
+		public WeakReference WeakHandler { get; set; }
 
 		public EtoTableHeaderView()
 		{
@@ -86,20 +50,29 @@ namespace Eto.Mac.Forms.Controls
 
 		public override void MouseDown(NSEvent theEvent)
 		{
-			if (!Handler.Table.AllowsColumnReordering)
+			var h = Handler;
+			if (h == null)
+			{
+				base.MouseDown(theEvent);
+				return;
+			}
+
+			var sel = MacView.selMouseDown;
+			if (!h.Table.AllowsColumnReordering)
 			{
 				var point = ConvertPointFromView(theEvent.LocationInWindow, null);
 
 				var col = GetColumn(point);
 				if (col >= 0)
 				{
-					var column = Handler.Widget.Columns[(int)col];
-					var rect = Handler.Table.RectForColumn(col);
+					var column = h.Widget.Columns[(int)col];
+					var rect = h.Table.RectForColumn(col);
+					// don't show any feedback to user when they click
 					if (!column.Sortable && point.X < rect.Right - 4 && point.X > rect.Left + 2)
-						return;
+						sel = IntPtr.Zero;
 				}
 			}
-			base.MouseDown(theEvent);
+			h.TriggerMouseDown(this, sel, theEvent);
 		}
 	}
 
@@ -319,6 +292,19 @@ namespace Eto.Mac.Forms.Controls
 		{
 			switch (id)
 			{
+				case Grid.ColumnWidthChangedEvent:
+					// handled in delegates
+					break;
+				case Eto.Forms.Control.MouseDownEvent:
+					AddMethod(MacView.selMouseDown, MacView.TriggerMouseDown_Delegate, "v@:@", Control.HeaderView);
+					AddMethod(MacView.selRightMouseDown, MacView.TriggerMouseDown_Delegate, "v@:@", Control.HeaderView);
+					AddMethod(MacView.selOtherMouseDown, MacView.TriggerMouseDown_Delegate, "v@:@", Control.HeaderView);
+					break;
+				case Eto.Forms.Control.MouseUpEvent:
+					AddMethod(MacView.selMouseUp, MacView.TriggerMouseUp_Delegate, "v@:@", Control.HeaderView);
+					AddMethod(MacView.selRightMouseUp, MacView.TriggerMouseUp_Delegate, "v@:@", Control.HeaderView);
+					AddMethod(MacView.selOtherMouseUp, MacView.TriggerMouseUp_Delegate, "v@:@", Control.HeaderView);
+					break;
 				default:
 					base.AttachEvent(id);
 					break;
@@ -451,6 +437,7 @@ namespace Eto.Mac.Forms.Controls
 			{
 				Widget.Properties.Set(GridHandler.ContextMenu_Key, value);
 				Control.Menu = value.ToNS();
+				Control.HeaderView.Menu = value.ToNS();
 			}
 		}
 
@@ -506,7 +493,7 @@ namespace Eto.Mac.Forms.Controls
 
 		public void SelectRow(int row)
 		{
-			Control.SelectRow((nnint)row, AllowMultipleSelection);
+			Control.SelectRow(row, AllowMultipleSelection);
 		}
 
 		public void UnselectRow(int row)
@@ -523,7 +510,7 @@ namespace Eto.Mac.Forms.Controls
 		{
 			if (!Control.IsRowSelected(row))
 			{
-				Control.SelectRow((nnint)row, false);
+				Control.SelectRow((nint)row, false);
 			}
 			Control.EditColumn((nint)column, (nint)row, new NSEvent(), true);
 		}
@@ -671,7 +658,7 @@ namespace Eto.Mac.Forms.Controls
 			// reload this entire row
 			if (e.Row >= 0)
 			{
-				Control.ReloadData(NSIndexSet.FromIndex((nnint)e.Row), NSIndexSet.FromNSRange(new NSRange(0, Control.ColumnCount)));
+				Control.ReloadData(NSIndexSet.FromIndex((nint)e.Row), NSIndexSet.FromNSRange(new NSRange(0, Control.ColumnCount)));
 			}
 
 			if (e.GridColumn.AutoSize)
@@ -743,19 +730,30 @@ namespace Eto.Mac.Forms.Controls
 			}
 		}
 
+		static readonly object DidSetAutoSizeColumn_Key = new object();
+
+		internal bool DidSetAutoSizeColumn
+		{
+			get => Widget.Properties.Get<bool>(DidSetAutoSizeColumn_Key);
+			set => Widget.Properties.Set(DidSetAutoSizeColumn_Key, value);
+		}
+
 		protected void ColumnDidResize(NSNotification notification)
 		{
+			var column = notification.UserInfo["NSTableColumn"] as NSTableColumn;
+			var colHandler = GetColumn(column);
 			if (!IsAutoSizingColumns && Widget.Loaded && hasAutoSizedColumns == true)
 			{
 				// when the user resizes the column, don't autosize anymore when data/scroll changes
-				var column = notification.UserInfo["NSTableColumn"] as NSTableColumn;
 				if (column != null)
 				{
-					var colHandler = GetColumn(column);
-					colHandler.AutoSize = false;
+					if (!DidSetAutoSizeColumn)
+						colHandler.AutoSize = false;
 					InvalidateMeasure();
 				}
 			}
+			if (colHandler != null)
+				Callback.OnColumnWidthChanged(Widget, new GridColumnEventArgs(colHandler.Widget));
 		}
 		
 		protected virtual bool HandleMouseEvent(NSEvent theEvent)
@@ -831,6 +829,15 @@ namespace Eto.Mac.Forms.Controls
 					Control.MoveColumn(fromIndex, index);
 			}
 		}
+		
+		internal int DisplayIndexToColumnIndex(int displayIndex)
+		{
+			var col = Widget.Columns.FirstOrDefault(r => r.DisplayIndex == displayIndex);
+			if (col == null)
+				return -1;
+			return Widget.Columns.IndexOf(col);
+		}
+
 	}
 }
 

@@ -8,39 +8,6 @@ using Eto.Mac.Drawing;
 using System.Runtime.CompilerServices;
 using System.Threading;
 
-#if XAMMAC2
-using AppKit;
-using Foundation;
-using CoreGraphics;
-using ObjCRuntime;
-using CoreAnimation;
-using CoreImage;
-using CoreFoundation;
-#else
-using MonoMac;
-using MonoMac.AppKit;
-using MonoMac.Foundation;
-using MonoMac.CoreGraphics;
-using MonoMac.ObjCRuntime;
-using MonoMac.CoreAnimation;
-using MonoMac.CoreImage;
-using MonoMac.CoreFoundation;
-#if Mac64
-using nfloat = System.Double;
-using nint = System.Int64;
-using nuint = System.UInt64;
-#else
-using nfloat = System.Single;
-using nint = System.Int32;
-using nuint = System.UInt32;
-#endif
-#if SDCOMPAT
-using CGSize = System.Drawing.SizeF;
-using CGRect = System.Drawing.RectangleF;
-using CGPoint = System.Drawing.PointF;
-#endif
-#endif
-
 namespace Eto.Mac.Forms
 {
 	public class ApplicationHandler : WidgetHandler<NSApplication, Application, Application.ICallback>, Application.IHandler
@@ -192,6 +159,7 @@ namespace Eto.Mac.Forms
 		
 		public void RunIteration()
 		{
+			MacView.InMouseTrackingLoop = false;
 			// drain the event queue only for a short period of time so it doesn't lock up
 			var date = NSDate.FromTimeIntervalSinceNow(0.001);
 			for (;;)
@@ -307,11 +275,17 @@ namespace Eto.Mac.Forms
 						NSApplication.Notifications.ObserveDidFinishLaunching(DidFinishLaunching);
 					}
 					break;
+				case Application.IsActiveChangedEvent:
+					NSNotificationCenter.DefaultCenter.AddObserver(NSApplication.DidBecomeActiveNotification, SharedApplication_ActiveChanged);
+					NSNotificationCenter.DefaultCenter.AddObserver(NSApplication.DidResignActiveNotification, SharedApplication_ActiveChanged);
+					break;
 				default:
 					base.AttachEvent(id);
 					break;
 			}
 		}
+
+		void SharedApplication_ActiveChanged(NSNotification obj) => Callback.OnIsActiveChanged(Widget, EventArgs.Empty);
 
 		void OnCurrentDomainUnhandledException(object sender, System.UnhandledExceptionEventArgs e)
 		{
@@ -353,5 +327,7 @@ namespace Eto.Mac.Forms
 		public Keys CommonModifier => Keys.Application;
 
 		public Keys AlternateModifier => Keys.Alt;
+
+		public bool IsActive => NSApplication.SharedApplication.Active;
 	}
 }

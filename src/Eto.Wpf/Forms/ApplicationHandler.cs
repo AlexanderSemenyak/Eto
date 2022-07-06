@@ -7,6 +7,7 @@ using sw = System.Windows;
 using swm = System.Windows.Media;
 using System.Threading;
 using System.Windows.Threading;
+using Eto.Drawing;
 
 namespace Eto.Wpf.Forms
 {
@@ -139,8 +140,6 @@ namespace Eto.Wpf.Forms
 			}
 		}
 
-		public event EventHandler IsActiveChanged;
-
 		bool _isActive;
 		public bool IsActive
 		{
@@ -150,7 +149,7 @@ namespace Eto.Wpf.Forms
 				if (_isActive != value)
 				{
 					_isActive = value;
-					IsActiveChanged?.Invoke(this, EventArgs.Empty);
+					Callback.OnIsActiveChanged(Widget, EventArgs.Empty);
 				}
 			}
 		}
@@ -168,16 +167,11 @@ namespace Eto.Wpf.Forms
 						mainWindow.TaskbarItemInfo = new sw.Shell.TaskbarItemInfo();
 					if (!string.IsNullOrEmpty(badgeLabel))
 					{
-						var ctl = new CustomControls.OverlayIcon();
-						ctl.Content = badgeLabel;
-						ctl.Measure(new sw.Size(16, 16));
-						var size = ctl.DesiredSize;
-
+						// scale by the current pixel size
 						var m = sw.PresentationSource.FromVisual(mainWindow).CompositionTarget.TransformToDevice;
+						var scale = (float)m.M22;
 
-						var bmp = new swm.Imaging.RenderTargetBitmap((int)size.Width, (int)size.Height, m.M22 * 96, m.M22 * 96, swm.PixelFormats.Default);
-						ctl.Arrange(new sw.Rect(size));
-						bmp.RenderWithCollect(ctl);
+						var bmp = GenerateBadge(scale, badgeLabel);
 						mainWindow.TaskbarItemInfo.Overlay = bmp;
 					}
 					else
@@ -186,6 +180,24 @@ namespace Eto.Wpf.Forms
 			}
 		}
 
+		protected virtual swm.Imaging.BitmapSource GenerateBadge(float scale, string label)
+		{
+			var size = Size.Round(new SizeF(14, 14) * scale);
+			var bmp = new Bitmap(size, PixelFormat.Format32bppRgba);
+			
+			using (var graphics = new Graphics(bmp))
+			{
+				var font = SystemFonts.Bold(6 * scale);
+
+				var textSize = graphics.MeasureString(font, label);
+				graphics.FillEllipse(Brushes.Red, new Rectangle(size));
+
+				var pt = new PointF((bmp.Width - textSize.Width) / 2, (bmp.Height - textSize.Height - scale) / 2);
+				graphics.DrawText(font, Brushes.White, pt, label);
+			}
+
+			return bmp.ToWpf();
+		}
 
 		public void RunIteration()
 		{
@@ -292,6 +304,9 @@ namespace Eto.Wpf.Forms
 					break;
 				case Application.NotificationActivatedEvent:
 					// handled by NotificationHandler
+					break;
+				case Application.IsActiveChangedEvent:
+					// handled always
 					break;
 				default:
 					base.AttachEvent(id);

@@ -49,7 +49,7 @@ namespace Eto.GtkSharp.Forms.Controls
 					{
 						var newpath = path.Copy();
 						newpath.AppendIndex(i);
-						Handler.Tree.ExpandToPath(newpath);
+						Handler.Control.ExpandToPath(newpath);
 						ExpandItems((ITreeGridStore<ITreeGridItem>)item, newpath);
 					}
 				}
@@ -73,7 +73,7 @@ namespace Eto.GtkSharp.Forms.Controls
 				var path = new Gtk.TreePath();
 				path.AppendIndex(Collection.Count);
 				var iter = Handler.model.GetIterFromItem(item, path);
-				Handler.Tree.Model.EmitRowInserted(path, iter);
+				Handler.Control.Model.EmitRowInserted(path, iter);
 			}
 
 			public override void InsertItem(int index, ITreeGridItem item)
@@ -81,14 +81,14 @@ namespace Eto.GtkSharp.Forms.Controls
 				var path = new Gtk.TreePath();
 				path.AppendIndex(index);
 				var iter = Handler.model.GetIterFromItem(item, path);
-				Handler.Tree.Model.EmitRowInserted(path, iter);
+				Handler.Control.Model.EmitRowInserted(path, iter);
 			}
 
 			public override void RemoveItem(int index)
 			{
 				var path = new Gtk.TreePath();
 				path.AppendIndex(index);
-				Handler.Tree.Model.EmitRowDeleted(path);
+				Handler.Control.Model.EmitRowDeleted(path);
 			}
 
 			public override void RemoveAllItems()
@@ -120,7 +120,7 @@ namespace Eto.GtkSharp.Forms.Controls
 				if (AllowMultipleSelection)
 					return SelectedItems.FirstOrDefault() as ITreeGridItem;
 				Gtk.TreeIter iter;
-				return Tree.Selection.GetSelected(out iter) ? model.GetItemAtIter(iter) : null;
+				return Control.Selection.GetSelected(out iter) ? model.GetItemAtIter(iter) : null;
 			}
 			set
 			{
@@ -129,13 +129,13 @@ namespace Eto.GtkSharp.Forms.Controls
 					var path = model.GetPathFromItem(value);
 					if (path != null)
 					{
-						Tree.ExpandToPath(path);
-						Tree.Selection.SelectPath(path);
-						Tree.ScrollToCell(path, null, false, 0, 0);
+						Control.ExpandToPath(path);
+						Control.Selection.SelectPath(path);
+						Control.ScrollToCell(path, null, false, 0, 0);
 					}
 				}
 				else
-					Tree.Selection.UnselectAll();
+					Control.Selection.UnselectAll();
 			}
 		}
 
@@ -157,22 +157,22 @@ namespace Eto.GtkSharp.Forms.Controls
 			switch (id)
 			{
 				case TreeGridView.ActivatedEvent:
-					Tree.RowActivated += Connector.HandleRowActivated;
+					Control.RowActivated += Connector.HandleRowActivated;
 					break;
 				case TreeGridView.ExpandingEvent:
-					Tree.TestExpandRow += Connector.HandleTestExpandRow;
+					Control.TestExpandRow += Connector.HandleTestExpandRow;
 					break;
 				case TreeGridView.ExpandedEvent:
-					Tree.RowExpanded += Connector.HandleRowExpanded;
+					Control.RowExpanded += Connector.HandleRowExpanded;
 					break;
 				case TreeGridView.CollapsingEvent:
-					Tree.TestCollapseRow += Connector.HandleTestCollapseRow;
+					Control.TestCollapseRow += Connector.HandleTestCollapseRow;
 					break;
 				case TreeGridView.CollapsedEvent:
-					Tree.RowCollapsed += Connector.HandleRowCollapsed;
+					Control.RowCollapsed += Connector.HandleRowCollapsed;
 					break;
 				case TreeGridView.SelectedItemChangedEvent:
-					Tree.Selection.Changed += Connector.HandleSelectionChanged;
+					Control.Selection.Changed += Connector.HandleSelectionChanged;
 					break;
 				default:
 					base.AttachEvent(id);
@@ -192,79 +192,89 @@ namespace Eto.GtkSharp.Forms.Controls
 
 			public void HandleTestExpandRow(object o, Gtk.TestExpandRowArgs args)
 			{
-				var h = Handler;
-				if (h.suppressExpandCollapseEvents > 0)
+				var handler = Handler;
+				if (handler == null)
 					return;
-				var e = new TreeGridViewItemCancelEventArgs(h.GetItem(args.Path) as ITreeGridItem);
-				h.Callback.OnExpanding(h.Widget, e);
+				if (handler.suppressExpandCollapseEvents > 0)
+					return;
+				var e = new TreeGridViewItemCancelEventArgs(handler.GetItem(args.Path) as ITreeGridItem);
+				handler.Callback.OnExpanding(handler.Widget, e);
 				args.RetVal = e.Cancel;
 			}
 
 			public void HandleRowExpanded(object o, Gtk.RowExpandedArgs args)
 			{
-				var h = Handler;
-				if (h.suppressExpandCollapseEvents > 0)
+				var handler = Handler;
+				if (handler == null)
 					return;
-				var e = new TreeGridViewItemEventArgs(h.GetItem(args.Path) as ITreeGridItem);
+				if (handler.suppressExpandCollapseEvents > 0)
+					return;
+				var e = new TreeGridViewItemEventArgs(handler.GetItem(args.Path) as ITreeGridItem);
 				e.Item.Expanded = true;
-				h.suppressExpandCollapseEvents++;
-				h.collection.ExpandItems(e.Item as ITreeGridStore<ITreeGridItem>, args.Path);
-				h.suppressExpandCollapseEvents--;
-				h.Callback.OnExpanded(h.Widget, e);
+				handler.suppressExpandCollapseEvents++;
+				handler.collection.ExpandItems(e.Item as ITreeGridStore<ITreeGridItem>, args.Path);
+				handler.suppressExpandCollapseEvents--;
+				handler.Callback.OnExpanded(handler.Widget, e);
 			}
 
 			public void HandleTestCollapseRow(object o, Gtk.TestCollapseRowArgs args)
 			{
-				var h = Handler;
-				if (h.suppressExpandCollapseEvents > 0)
+				var handler = Handler;
+				if (handler == null)
 					return;
-				var e = new TreeGridViewItemCancelEventArgs(h.GetItem(args.Path) as ITreeGridItem);
-				h.Callback.OnCollapsing(h.Widget, e);
+				if (handler.suppressExpandCollapseEvents > 0)
+					return;
+				var e = new TreeGridViewItemCancelEventArgs(handler.GetItem(args.Path) as ITreeGridItem);
+				handler.Callback.OnCollapsing(handler.Widget, e);
 				args.RetVal = e.Cancel;
 				if (!e.Cancel)
 				{
-					h.selectCollapsingItem = !h.AllowMultipleSelection && h.ChildIsSelected(e.Item);
-					h.SkipSelectedChange = true;
+					handler.selectCollapsingItem = !handler.AllowMultipleSelection && handler.ChildIsSelected(e.Item);
+					handler.SkipSelectedChange = true;
 				}
 			}
 
 			public void HandleRowCollapsed(object o, Gtk.RowCollapsedArgs args)
 			{
-				var h = Handler;
-				if (h.suppressExpandCollapseEvents > 0)
+				var handler = Handler;
+				if (handler == null)
 					return;
-				var e = new TreeGridViewItemEventArgs(h.GetItem(args.Path) as ITreeGridItem);
+				if (handler.suppressExpandCollapseEvents > 0)
+					return;
+				var e = new TreeGridViewItemEventArgs(handler.GetItem(args.Path) as ITreeGridItem);
 				e.Item.Expanded = false;
-				h.Callback.OnCollapsed(h.Widget, e);
-				h.SkipSelectedChange = false;
-				if (h.selectCollapsingItem == true)
+				handler.Callback.OnCollapsed(handler.Widget, e);
+				handler.SkipSelectedChange = false;
+				if (handler.selectCollapsingItem == true)
 				{
-					h.Tree.Selection.UnselectAll();
-					h.Tree.Selection.SelectPath(args.Path);
-					h.selectCollapsingItem = null;
+					handler.Control.Selection.UnselectAll();
+					handler.Control.Selection.SelectPath(args.Path);
+					handler.selectCollapsingItem = null;
 				}
 			}
 
 			public void HandleSelectionChanged(object sender, EventArgs e)
 			{
-				var h = Handler;
-				var item = h.SelectedItem;
-				if (!h.SkipSelectedChange && !object.ReferenceEquals(item, h.lastSelected))
+				var handler = Handler;
+				if (handler == null)
+					return;
+				var item = handler.SelectedItem;
+				if (!handler.SkipSelectedChange && !object.ReferenceEquals(item, handler.lastSelected))
 				{
-					h.Callback.OnSelectedItemChanged(h.Widget, EventArgs.Empty);
-					h.lastSelected = item;
+					handler.Callback.OnSelectedItemChanged(handler.Widget, EventArgs.Empty);
+					handler.lastSelected = item;
 				}
 			}
 
 			public void HandleRowActivated(object o, Gtk.RowActivatedArgs args)
 			{
-				Handler.Callback.OnActivated(Handler.Widget, new TreeGridViewItemEventArgs(Handler.model.GetItemAtPath(args.Path)));
+				Handler?.Callback.OnActivated(Handler.Widget, new TreeGridViewItemEventArgs(Handler.model.GetItemAtPath(args.Path)));
 			}
 
 			protected override DragEventArgs GetDragEventArgs(Gdk.DragContext context, PointF? location, uint time = 0, object controlObject = null)
 			{
 				var h = Handler;
-				var t = h?.Tree;
+				var t = h?.Control;
 				TreeGridViewDragInfo dragInfo = _dragInfo;
 				if (dragInfo == null && location != null)
 				{
@@ -326,7 +336,7 @@ namespace Eto.GtkSharp.Forms.Controls
 					}
 
 					if (path.Depth > 0)
-						h.Tree.SetDragDestRow(path, pos);
+						h.Control.SetDragDestRow(path, pos);
 				}
 				else if (insertIndex != -1 && !ReferenceEquals(info.Parent, null) && info.Position == GridDragPosition.After)
 				{
@@ -335,7 +345,7 @@ namespace Eto.GtkSharp.Forms.Controls
 						return;
 
 					path.AppendIndex(0);
-					h.Tree.SetDragDestRow(path, Gtk.TreeViewDropPosition.Before);
+					h.Control.SetDragDestRow(path, Gtk.TreeViewDropPosition.Before);
 				}
 
 			}
@@ -387,21 +397,21 @@ namespace Eto.GtkSharp.Forms.Controls
 			Gtk.TreeIter iter;
 			Gtk.TreeIter temp;
 
-			bool valid = Tree.Model.GetIterFirst(out iter);
+			bool valid = Control.Model.GetIterFirst(out iter);
 			while (valid)
 			{
 				// Check
-				path = Tree.Model.GetPath(iter);
+				path = Control.Model.GetPath(iter);
 				if (model.GetRowIndexOfIter(iter) == row)
 					return path;
 
 				// Go Down
-				if (Tree.GetRowExpanded(path) && Tree.Model.IterChildren(out iter, iter))
+				if (Control.GetRowExpanded(path) && Control.Model.IterChildren(out iter, iter))
 					continue;
 
 				// Go Next
 				temp = iter;
-				if (Tree.Model.IterNext(ref iter))
+				if (Control.Model.IterNext(ref iter))
 					continue;
 				else
 					iter = temp;
@@ -409,11 +419,11 @@ namespace Eto.GtkSharp.Forms.Controls
 				while (valid)
 				{
 					// Go Up
-					if (Tree.Model.IterParent(out iter, iter))
+					if (Control.Model.IterParent(out iter, iter))
 					{
 						// Go Next
 						temp = iter;
-						if (Tree.Model.IterNext(ref iter))
+						if (Control.Model.IterNext(ref iter))
 							break;
 						else
 							iter = temp;
@@ -424,14 +434,14 @@ namespace Eto.GtkSharp.Forms.Controls
 			}
 
 			// Get and return first if given row does not exist
-			Tree.Model.GetIterFirst(out iter);
-			return Tree.Model.GetPath(iter);
+			Control.Model.GetIterFirst(out iter);
+			return Control.Model.GetPath(iter);
 		}
 
 		protected override void SetSelectedRows(IEnumerable<int> value)
 		
 		{
-			Tree.Selection.UnselectAll();
+			Control.Selection.UnselectAll();
 			if (value != null && collection != null)
 			{
 				int start = -1;
@@ -447,18 +457,18 @@ namespace Eto.GtkSharp.Forms.Controls
 					else
 					{
 						if (start == end)
-							Tree.Selection.SelectIter(GetIterAtRow(start));
+							Control.Selection.SelectIter(GetIterAtRow(start));
 						else
-							Tree.Selection.SelectRange(GetPathAtRow(start), GetPathAtRow(end));
+							Control.Selection.SelectRange(GetPathAtRow(start), GetPathAtRow(end));
 						start = end = row;
 					}
 				}
 				if (start != -1)
 				{
 					if (start == end)
-						Tree.Selection.SelectIter(GetIterAtRow(start));
+						Control.Selection.SelectIter(GetIterAtRow(start));
 					else
-						Tree.Selection.SelectRange(GetPathAtRow(start), GetPathAtRow(end));
+						Control.Selection.SelectRange(GetPathAtRow(start), GetPathAtRow(end));
 				}
 			}
 		}
@@ -487,24 +497,6 @@ namespace Eto.GtkSharp.Forms.Controls
 			return collection == null ? -1 : collection.IndexOf(item);
 		}
 		
-		(double? hscroll, double? vscroll) SaveScrollState()
-		{
-			var hscrollbar = Control.HScrollbar as Gtk.HScrollbar;
-			var vscrollbar = Control.VScrollbar as Gtk.VScrollbar;
-			var hscroll = hscrollbar?.Value;
-			var vscroll = vscrollbar?.Value;
-			return (hscroll, vscroll);
-		}
-		
-		void RestoreScrollState((double? hscroll, double? vscroll) state)
-		{
-			var hscrollbar = Control.HScrollbar as Gtk.HScrollbar;
-			var vscrollbar = Control.VScrollbar as Gtk.VScrollbar;
-			if (state.hscroll != null)
-				hscrollbar.Value = state.hscroll.Value;
-			if (state.vscroll != null)
-				vscrollbar.Value = state.vscroll.Value;
-		}
 
 		public void ReloadData()
 		{
@@ -522,12 +514,12 @@ namespace Eto.GtkSharp.Forms.Controls
 			// restore selection
 			SkipSelectedChange = true;
 			bool selectionChanged = false;
-			Tree.Selection.UnselectAll();
+			Control.Selection.UnselectAll();
 			foreach (var item in items.OfType<ITreeGridItem>())
 			{
 				var iter = model.GetIterFromItem(item, true);
 				if (iter != null)
-					Tree.Selection.SelectIter(iter.Value);
+					Control.Selection.SelectIter(iter.Value);
 				else
 					selectionChanged = true;
 			}
@@ -541,7 +533,7 @@ namespace Eto.GtkSharp.Forms.Controls
 
 		public void ReloadItem(ITreeGridItem item, bool reloadChildren)
 		{
-			var tree = Tree;
+			var tree = Control;
 			var path = model.GetPathFromItem(item);
 			if (path != null && path.Depth > 0 && !ReferenceEquals(item, collection.Collection))
 			{
@@ -583,26 +575,43 @@ namespace Eto.GtkSharp.Forms.Controls
 				ReloadData();
 		}
 
-		public ITreeGridItem GetCellAt(PointF location, out int column)
+		public TreeGridCell GetCellAt(PointF location)
 		{
-			Gtk.TreePath path;
-			Gtk.TreeViewColumn col;
-			if (Tree.GetPathAtPos((int)location.X, (int)location.Y, out path, out col))
+			int columnIndex;
+			int rowIndex;
+			object item;
+			GridCellType cellType;
+
+			var isData = Control.GetPathAtPos((int)location.X, (int)location.Y, out var path, out var col);
+			
+			if (isData)
 			{
-				column = GetColumnOfItem(col);
-				return model.GetItemAtPath(path);
+				columnIndex = GetColumnIndex(col);
+				rowIndex = GetRowIndexOfPath(path);
+				item = model.GetItemAtPath(path);
+				if (columnIndex == -1)
+					cellType = GridCellType.None;
+				else
+					cellType = GridCellType.Data;
 			}
-			column = -1;
-			return null;
+			else
+			{
+				columnIndex = -1;
+				rowIndex = -1;
+				item = null;
+				cellType = GridCellType.None;
+			}
+			var column = columnIndex != -1 ? Widget.Columns[columnIndex] : null;
+			return new TreeGridCell(column, columnIndex, cellType, item);
 		}
 
 		public TreeGridViewDragInfo GetDragInfo(DragEventArgs args) => args.ControlObject as TreeGridViewDragInfo;
 
 		ITreeGridItem IGtkListModelHandler<ITreeGridItem>.GetItem(int row) => DataStore?[row];
 
-		public override IEnumerable<int> SelectedRows => Tree.Selection.GetSelectedRows().Select(GetRowIndexOfPath);
+		public override IEnumerable<int> SelectedRows => Control.Selection.GetSelectedRows().Select(GetRowIndexOfPath);
 
-		public IEnumerable<object> SelectedItems => Tree.Selection.GetSelectedRows().Select(GetItem);
+		public IEnumerable<object> SelectedItems => Control.Selection.GetSelectedRows().Select(GetItem);
 
 		protected override bool HasRows => model.IterHasChild(Gtk.TreeIter.Zero);
 

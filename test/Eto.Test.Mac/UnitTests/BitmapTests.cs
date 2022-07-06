@@ -3,12 +3,12 @@ using Eto.Forms;
 using Eto.Test.UnitTests;
 using NUnit.Framework;
 
-#if XAMMAC2
-using AppKit;
-using CoreGraphics;
-#else
+#if MONOMAC
 using MonoMac.AppKit;
 using MonoMac.CoreGraphics;
+#else
+using AppKit;
+using CoreGraphics;
 #endif
 
 namespace Eto.Test.Mac.UnitTests
@@ -41,7 +41,10 @@ namespace Eto.Test.Mac.UnitTests
 
 					g.DrawRectangle(Colors.Black, 0.5f, 0.5f, 199, 199);
 					g.FillRectangle(Colors.Black, 59, 59, 80, 80);
-					
+
+					var path = new GraphicsPath();
+					g.DrawPolygon(Colors.Black, new PointF(100, 20), new PointF(180, 180), new PointF(20, 180));
+
 				}
 				
 				var drawable = new Drawable { Size = bmp.Size };

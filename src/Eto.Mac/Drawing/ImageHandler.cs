@@ -1,35 +1,7 @@
 using Eto.Drawing;
 using Eto.Mac.Forms;
 
-#if XAMMAC2
-using AppKit;
-using Foundation;
-using CoreGraphics;
-using ObjCRuntime;
-using CoreAnimation;
-using CoreImage;
-#else
-using MonoMac.AppKit;
-using MonoMac.Foundation;
-using MonoMac.CoreGraphics;
-using MonoMac.ObjCRuntime;
-using MonoMac.CoreAnimation;
-using MonoMac.CoreImage;
-#if Mac64
-using nfloat = System.Double;
-using nint = System.Int64;
-using nuint = System.UInt64;
-#else
-using nfloat = System.Single;
-using nint = System.Int32;
-using nuint = System.UInt32;
-#endif
-#if SDCOMPAT
-using CGSize = System.Drawing.SizeF;
-using CGRect = System.Drawing.RectangleF;
-using CGPoint = System.Drawing.PointF;
-#endif
-#endif
+
 
 namespace Eto.Mac.Drawing
 {
@@ -75,6 +47,15 @@ namespace Eto.Mac.Drawing
 			var ctx = graphics.Control;
 			ctx.SaveState();
 
+			var image = GetImage();
+
+			if (!image.Flipped)
+			{
+				// draw flipped
+				ctx.ConcatCTM(new CGAffineTransform(1, 0, 0, -1, 0, graphics.ViewHeight));
+				destination.Y = graphics.ViewHeight - destination.Y - destination.Height;
+			}
+
 			RectangleF destMask;
 			if (destination.Size != source.Size)
 			{
@@ -87,25 +68,21 @@ namespace Eto.Mac.Drawing
 				// just position
 				destMask = new RectangleF(destination.Location - source.Location, imageSize);
 			}
-			
+
 			var destRect = destination.ToNS();
-			var cgImage = GetImage().AsCGImage(ref destRect, graphics.GraphicsContext, null);
+			var cgImage = image.AsCGImage(ref destRect, graphics.GraphicsContext, null);
 
 			// clip to the image as a mask, using only alpha channel
 			ctx.ClipToMask(destMask.ToNS(), cgImage);
 
-			// set fill color based on current dark/light theme
+			// set fill color based on current dark/light theme	
 			// this is the best approximation I can find to get it to draw the same as NSImageView
 			// thus far..
 			NSColor color;
-			if (MacVersion.IsAtLeast(10, 14) && graphics.DisplayView.HasDarkTheme())
-			{
+			if (graphics.DisplayView.HasDarkTheme())
 				color = NSColor.FromWhite(1f, .55f);
-			}
 			else
-			{
 				color = NSColor.FromWhite(0, .5f);
-			}
 			color.SetFill();
 
 			ctx.FillRect(destRect);

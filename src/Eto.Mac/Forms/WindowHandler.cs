@@ -1,19 +1,6 @@
 using Eto.Drawing;
 using Eto.Forms;
 using System.Linq;
-#if XAMMAC2
-using AppKit;
-using Foundation;
-using CoreGraphics;
-using ObjCRuntime;
-using CoreAnimation;
-#else
-using MonoMac.AppKit;
-using MonoMac.Foundation;
-using MonoMac.CoreGraphics;
-using MonoMac.ObjCRuntime;
-using MonoMac.CoreAnimation;
-#endif
 
 namespace Eto.Mac.Forms
 {
@@ -26,7 +13,7 @@ namespace Eto.Mac.Forms
 			var windowNumber = NSWindow.WindowNumberAtPoint(nspoint, 0);
 			foreach (var window in Application.Instance.Windows)
 			{
-				if (window.Handler is IMacWindow handler && handler.Control.WindowNumber == windowNumber)
+				if (!window.IsDisposed && window.Handler is IMacWindow handler && handler.Control.WindowNumber == windowNumber)
 				{
 					return window;
 				}
